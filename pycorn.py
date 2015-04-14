@@ -12,6 +12,8 @@ import argparse
 import codecs
 import os
 import time
+import numpy
+from itertools import islice
 try:
     import matplotlib.pyplot as plt
     from matplotlib.ticker import AutoMinorLocator
@@ -371,6 +373,63 @@ def expander(min_val,max_val,perc):
     x = delta*perc 
     return(min_val - x, max_val + x)
 
+def peaks(series, span):
+	z=[]
+	for each in window(series, span):
+		z.append(list(each))
+	s=span//2
+	print s
+	v=numpy.asarray(z).argmax(1)==s
+	result=numpy.concatenate([[False,False],v])
+	return result
+	
+def window(seq, n):
+    "Returns a sliding window (of width n) over data from the iterable"
+    "   s -> (s0,s1,...s[n-1]), (s1,s2,...,sn), ...                   "
+    it = iter(seq)
+    result = tuple(islice(it, n))
+    if len(result) == n:
+        yield result    
+    for elem in it:
+        result = result[1:] + (elem,)
+        yield result
+
+def deriv1(x,y):
+	yprime=numpy.diff(y)/numpy.diff(x)
+	xprime=x[0:-1]+numpy.diff(x)/2
+	return numpy.array([xprime,yprime])
+
+def deriv2(x,y):
+	h=x[1]-x[0]
+	a=len(x)
+	return numpy.array([x[1:(a-2)], numpy.sum([y[2:a-1], -2*y[1:(a-2)], y[0:(a-3)]], axis=0)/h**2])
+
+def label_peaks(x,y,ymin,ymax,s):
+	x=numpy.asarray(x)
+	y=numpy.asarray(y)
+	derivative2=deriv2(x,y)
+	print y[1:20]
+	print x[1:20]
+	print derivative2[1][-20:]
+	print derivative2[0][-20:]
+	valleys_Deriv2=peaks(-derivative2[1], span=s)
+	peak_list=numpy.array([x[numpy.where(valleys_Deriv2==True)[0]],y[numpy.where(valleys_Deriv2==True)[0]]])
+	print peak_list
+	for i in range(0,len(peak_list)):
+		lower_bound=numpy.where(valleys_Deriv2==True)[0][i]-s//2
+		upper_bound=numpy.where(valleys_Deriv2==True)[0][i]+s//2
+		if upper_bound > len(x):
+			upper_bound = len(x)
+		if lower_bound < 1:
+			lower_bound = 0
+		peak_list[0,i]=x[lower_bound+numpy.argmax(y[lower_bound:upper_bound])]
+		peak_list[1,i]=y[lower_bound+numpy.argmax(y[lower_bound:upper_bound])]
+	cutoff=ymin+(ymax-ymin)*0.1
+	print peak_list
+	peak_list=peak_list[:,peak_list[1,:]>cutoff]
+	print peak_list
+	return peak_list
+
 def plotter(inp,fractions):
     '''
     plots a data series with fractions if present
@@ -404,6 +463,8 @@ def plotter(inp,fractions):
     y_val = y_val[range_min:range_max]
     plot_y_min = expander(min(y_val),max(y_val),0.085)[0]
     plot_y_max = expander(min(y_val),max(y_val),0.025)[1]
+    if inp['data_name']=='UV':
+    	peaks=label_peaks(x_val,y_val,plot_y_min,plot_y_max,(range_max-range_min)*0.1)
     if type(y_val[0]) == float or type(y_val[0]) == int:
         plt.xlim(xmin = plot_x_min, xmax = plot_x_max)
         plt.ylim(ymin = plot_y_min, ymax = plot_y_max)
@@ -417,6 +478,11 @@ def plotter(inp,fractions):
         plt.tick_params(axis='x',top='off',direction='out',length=6)
         plt.tick_params(axis='y',right='off',direction='out',length=6)
         plt.plot(x_val, y_val,linewidth=1.5, color='b')
+        if inp['data_name']=='UV':
+        	plt.scatter(peaks[0], peaks[1], s=40)
+        	x_text_shift=0.01*(plot_x_max-plot_x_min)
+        	for i in range(0,len(peaks)):
+    			plt.annotate(peaks[0][i], xy = (peaks[0][i]+x_text_shift, peaks[1][i]))
         ax.xaxis.set_minor_locator(AutoMinorLocator())
         ax.yaxis.set_minor_locator(AutoMinorLocator())
         ax.tick_params(axis='x',top='off',which='minor', direction='out', length=4, color='0.17')
