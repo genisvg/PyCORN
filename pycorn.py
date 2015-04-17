@@ -378,9 +378,8 @@ def peaks(series, span):
 	for each in window(series, span):
 		z.append(list(each))
 	s=span//2
-	print s
 	v=numpy.asarray(z).argmax(1)==s
-	result=numpy.concatenate([[False,False],v])
+	result=numpy.concatenate([numpy.repeat(False,s),v])
 	return result
 	
 def window(seq, n):
@@ -394,28 +393,25 @@ def window(seq, n):
         result = result[1:] + (elem,)
         yield result
 
-def deriv1(x,y):
-	yprime=numpy.diff(y)/numpy.diff(x)
-	xprime=x[0:-1]+numpy.diff(x)/2
-	return numpy.array([xprime,yprime])
-
 def deriv2(x,y):
 	h=x[1]-x[0]
 	a=len(x)
 	return numpy.array([x[1:(a-2)], numpy.sum([y[2:a-1], -2*y[1:(a-2)], y[0:(a-3)]], axis=0)/h**2])
 
 def label_peaks(x,y,ymin,ymax,s):
+	'''
+	First we estimate the maxima by using the second derivative method
+	'''
 	x=numpy.asarray(x)
 	y=numpy.asarray(y)
 	derivative2=deriv2(x,y)
-	print y[1:20]
-	print x[1:20]
-	print derivative2[1][-20:]
-	print derivative2[0][-20:]
 	valleys_Deriv2=peaks(-derivative2[1], span=s)
 	peak_list=numpy.array([x[numpy.where(valleys_Deriv2==True)[0]],y[numpy.where(valleys_Deriv2==True)[0]]])
-	print peak_list
-	for i in range(0,len(peak_list)):
+	'''
+	Next we find the true maxima in the real data based on the estimation
+	s is the span, i.e. a window for the peak width
+	'''
+	for i in range(0,len(peak_list[0])):
 		lower_bound=numpy.where(valleys_Deriv2==True)[0][i]-s//2
 		upper_bound=numpy.where(valleys_Deriv2==True)[0][i]+s//2
 		if upper_bound > len(x):
@@ -424,8 +420,10 @@ def label_peaks(x,y,ymin,ymax,s):
 			lower_bound = 0
 		peak_list[0,i]=x[lower_bound+numpy.argmax(y[lower_bound:upper_bound])]
 		peak_list[1,i]=y[lower_bound+numpy.argmax(y[lower_bound:upper_bound])]
+	'''
+	Finally we ignore peaks which are <10% of the maximum UV signal
+	'''	
 	cutoff=ymin+(ymax-ymin)*0.1
-	print peak_list
 	peak_list=peak_list[:,peak_list[1,:]>cutoff]
 	print peak_list
 	return peak_list
@@ -481,7 +479,7 @@ def plotter(inp,fractions):
         if inp['data_name']=='UV':
         	plt.scatter(peaks[0], peaks[1], s=40)
         	x_text_shift=0.01*(plot_x_max-plot_x_min)
-        	for i in range(0,len(peaks)):
+        	for i in range(0,len(peaks[0])):
     			plt.annotate(peaks[0][i], xy = (peaks[0][i]+x_text_shift, peaks[1][i]))
         ax.xaxis.set_minor_locator(AutoMinorLocator())
         ax.yaxis.set_minor_locator(AutoMinorLocator())
